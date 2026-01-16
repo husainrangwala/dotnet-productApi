@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  productapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEW_RELIC_LICENSE_KEY: ${NEWRELIC_LICENSE_KEY}
+    container_name: productapi
+    ports:
+      - "80:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - NEW_RELIC_LICENSE_KEY=${NEWRELIC_LICENSE_KEY}
+      - NEW_RELIC_APP_NAME=My Product CRUD API
+      - CORECLR_ENABLE_PROFILING=1
+      - CORECLR_PROFILER={36032161-FFC0-4B61-B559-F6C5D41BAE5A}
+    env_file:
+      - ./.env
+    volumes:
+      - .:/app/src
+    networks:
+      - productapi-network
+
+networks:
+  productapi-network:
+    driver: bridge
