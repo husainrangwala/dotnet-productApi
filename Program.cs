@@ -2,12 +2,104 @@ using Microsoft.EntityFrameworkCore;
 using ProductApi.Data;
 using ProductApi.Middlewares;
 using NewRelic.Api.Agent;
+using System.Diagnostics;
 
-// Load environment variables from .env file
-Console.WriteLine("[STARTUP] Loading environment variables...");
-var env = Environment.GetEnvironmentVariable("NEW_RELIC_LICENSE_KEY");
-Console.WriteLine($"[STARTUP] Current NEW_RELIC_LICENSE_KEY: {(string.IsNullOrEmpty(env) ? "NOT SET" : "SET")}");
-if (string.IsNullOrEmpty(env))
+// ===== CRITICAL DIAGNOSTICS =====
+Console.WriteLine("\n╔════════════════════════════════════════════════════════════╗");
+Console.WriteLine("║       NEW RELIC AGENT DIAGNOSTIC - STARTUP CHECK           ║");
+Console.WriteLine("╚════════════════════════════════════════════════════════════╝\n");
+
+// 1. Check environment variables
+Console.WriteLine("[1️⃣  ENV VARS] Checking New Relic environment configuration...");
+var envVars = new Dictionary<string, string>
+{
+    { "CORECLR_ENABLE_PROFILING", Environment.GetEnvironmentVariable("CORECLR_ENABLE_PROFILING") ?? "NOT SET" },
+    { "CORECLR_PROFILER", Environment.GetEnvironmentVariable("CORECLR_PROFILER") ?? "NOT SET" },
+    { "CORECLR_PROFILER_PATH", Environment.GetEnvironmentVariable("CORECLR_PROFILER_PATH") ?? "NOT SET" },
+    { "CORECLR_NEWRELIC_HOME", Environment.GetEnvironmentVariable("CORECLR_NEWRELIC_HOME") ?? "NOT SET" },
+    { "NEW_RELIC_HOME", Environment.GetEnvironmentVariable("NEW_RELIC_HOME") ?? "NOT SET" },
+    { "NEW_RELIC_LICENSE_KEY", string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NEW_RELIC_LICENSE_KEY")) ? "NOT SET" : "✓ SET" },
+    { "NEW_RELIC_APP_NAME", Environment.GetEnvironmentVariable("NEW_RELIC_APP_NAME") ?? "NOT SET" }
+};
+
+foreach (var (key, value) in envVars)
+{
+    Console.WriteLine($"   {key}: {value}");
+}
+
+// 2. Check if profiler file exists
+Console.WriteLine("\n[2️⃣  FILES] Checking profiler binary file...");
+var profilerPath = Environment.GetEnvironmentVariable("CORECLR_PROFILER_PATH");
+if (!string.IsNullOrEmpty(profilerPath) && File.Exists(profilerPath))
+{
+    var fileInfo = new FileInfo(profilerPath);
+    Console.WriteLine($"   ✓ FOUND: {profilerPath}");
+    Console.WriteLine($"   Size: {fileInfo.Length} bytes");
+}
+else
+{
+    Console.WriteLine($"   ✗ NOT FOUND: {profilerPath}");
+    var newrelicHome = Environment.GetEnvironmentVariable("CORECLR_NEWRELIC_HOME") ?? "/app/newrelic";
+    Console.WriteLine($"   Checking files in {newrelicHome}:");
+    if (Directory.Exists(newrelicHome))
+    {
+        var files = Directory.GetFiles(newrelicHome);
+        foreach (var f in files)
+        {
+            Console.WriteLine($"      - {Path.GetFileName(f)}");
+        }
+    }
+    else
+    {
+        Console.WriteLine($"      ✗ Directory does not exist!");
+    }
+}
+
+// 3. Check if agent is loaded
+Console.WriteLine("\n[3️⃣  AGENT] Testing New Relic Agent attachment...");
+try
+{
+    var agent = NewRelic.Api.Agent.NewRelic.GetAgent();
+    if (agent != null)
+    {
+        Console.WriteLine($"   ✓✓✓ AGENT ATTACHED ✓✓✓");
+        Console.WriteLine($"   Agent Type: {agent.GetType().FullName}");
+        
+        // Try to record a test metric
+        try
+        {
+            NewRelic.Api.Agent.NewRelic.RecordMetric("Custom/Startup/DiagnosticTest", 1);
+            Console.WriteLine($"   ✓ Test metric recorded successfully");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"   ⚠️  Could not record test metric: {ex.Message}");
+        }
+    }
+    else
+    {
+        Console.WriteLine($"   ✗✗✗ AGENT NOT ATTACHED ✗✗✗");
+        Console.WriteLine($"   GetAgent() returned null - Profiler may not be loaded");
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"   ✗ ERROR accessing agent: {ex.Message}");
+    Console.WriteLine($"   {ex.StackTrace}");
+}
+
+// 4. Check process info
+Console.WriteLine("\n[4️⃣  PROCESS] Current process information...");
+var currentProcess = Process.GetCurrentProcess();
+Console.WriteLine($"   Process ID: {currentProcess.Id}");
+Console.WriteLine($"   Process Name: {currentProcess.ProcessName}");
+
+Console.WriteLine("\n╔════════════════════════════════════════════════════════════╗");
+Console.WriteLine("║                  END OF DIAGNOSTICS                        ║");
+Console.WriteLine("╚════════════════════════════════════════════════════════════╝\n");
+
+// Load environment variables from .env file if needed
+if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NEW_RELIC_LICENSE_KEY")))
 {
     Console.WriteLine("[STARTUP] License key not found in environment, checking .env file...");
     var envPath = Path.Combine(AppContext.BaseDirectory, ".env");
@@ -30,61 +122,7 @@ if (string.IsNullOrEmpty(env))
             }
         }
     }
-    else
-    {
-        Console.WriteLine($"[STARTUP] .env file NOT found at: {envPath}");
-    }
 }
-else
-{
-    Console.WriteLine("[STARTUP] License key found in environment variables");
-}
-
-// Verify license key is loaded
-var licenseKey = Environment.GetEnvironmentVariable("NEW_RELIC_LICENSE_KEY");
-var appName = Environment.GetEnvironmentVariable("NEW_RELIC_APP_NAME") ?? "ProductApi";
-var enableProfiling = Environment.GetEnvironmentVariable("CORECLR_ENABLE_PROFILING");
-var profilerPath = Environment.GetEnvironmentVariable("CORECLR_PROFILER");
-var profilerHome = Environment.GetEnvironmentVariable("CORECLR_NEWRELIC_HOME");
-var newRelicHome = Environment.GetEnvironmentVariable("NEWRELIC_HOME");
-
-Console.WriteLine("\n=== NEW RELIC CONFIGURATION ===");
-Console.WriteLine($"License Key: {(!string.IsNullOrEmpty(licenseKey) ? "✓ LOADED" : "✗ NOT FOUND")}");
-Console.WriteLine($"App Name: {appName}");
-Console.WriteLine($"Profiling Enabled: {enableProfiling ?? "NOT SET"}");
-Console.WriteLine($"Profiler GUID: {profilerPath ?? "NOT SET"}");
-Console.WriteLine($"Profiler Home: {profilerHome ?? "NOT SET"}");
-Console.WriteLine($"New Relic Home: {newRelicHome ?? "NOT SET"}");
-Console.WriteLine("================================\n");
-
-// ... (your existing .env loading code) ...
-
-// ===== ADD THIS CHECK HERE =====
-Console.WriteLine("\n[AGENT DIAGNOSTIC] === Testing New Relic Agent Connection ===");
-try
-{
-    var agent = NewRelic.Api.Agent.NewRelic.GetAgent();
-    if (agent != null)
-    {
-        Console.WriteLine($"[AGENT DIAGNOSTIC] ✓ Agent instance obtained. Type: {agent.GetType().FullName}");
-        Console.WriteLine($"[AGENT DIAGNOSTIC] ✓ Agent is theoretically attached to process.");
-
-        // Try a simple metric to test
-        NewRelic.Api.Agent.NewRelic.RecordMetric("Custom/Diagnostic/AgentTest", 1.0f);
-        Console.WriteLine($"[AGENT DIAGNOSTIC] ✓ Test metric 'Custom/Diagnostic/AgentTest' recorded.");
-    }
-    else
-    {
-        Console.WriteLine($"[AGENT DIAGNOSTIC] ✗ CRITICAL: GetAgent() returned NULL.");
-        Console.WriteLine($"[AGENT DIAGNOSTIC] ✗ Profiler is NOT loaded. Check CORECLR_PROFILER env var.");
-    }
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"[AGENT DIAGNOSTIC] ✗ EXCEPTION when accessing agent: {ex.Message}");
-}
-Console.WriteLine("[AGENT DIAGNOSTIC] ==========================================\n");
-// ===== END OF ADDED CODE =====
 
 var builder = WebApplication.CreateBuilder(args);
 

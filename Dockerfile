@@ -22,27 +22,37 @@ RUN apt-get update && \
 # Copy the published app
 COPY --from=build /app/out .
 
-# Copy New Relic agent from NuGet package
+# --- NEW RELIC AGENT INSTALLATION FROM NUGET PACKAGE ---
+# The agent files are already in the published output from NuGet package
+# Just need to ensure proper permissions and setup
 RUN mkdir -p /app/newrelic && \
-    find /app -name "libNewRelicProfiler.so" -exec cp {} /app/newrelic/ \; && \
-    find /app -name "newrelic.config" -exec cp {} /app/newrelic/ \; && \
-    find /app -name "*.xml" -path "*newrelic*" -exec cp {} /app/newrelic/ \; && \
-    echo "New Relic files copied:" && \
-    ls -la /app/newrelic/ || echo "No agent files found in package"
+    echo "[DOCKER BUILD] Setting up New Relic agent from NuGet package..." && \
+    find /app -name "libNewRelicProfiler.so" -exec cp {} /app/newrelic/ \; 2>/dev/null || true && \
+    find /app -name "newrelic.config" -exec cp {} /app/newrelic/ \; 2>/dev/null || true && \
+    echo "[DOCKER BUILD] Contents of /app/newrelic:" && \
+    ls -la /app/newrelic && \
+    if [ -f /app/newrelic/libNewRelicProfiler.so ]; then \
+        echo "[DOCKER BUILD] ✓ VERIFIED: libNewRelicProfiler.so EXISTS"; \
+    else \
+        echo "[DOCKER BUILD] ⚠️  libNewRelicProfiler.so not found - checking for agent files..."; \
+        find /app -name "*.so" -path "*newrelic*" 2>/dev/null || echo "No .so files found"; \
+        find /app/package* -name "libNewRelic*.so" 2>/dev/null || true; \
+    fi
 
 # --- NEW RELIC ENVIRONMENT CONFIGURATION ---
+# These MUST be set as ENV (not ARG) for runtime
 ENV CORECLR_ENABLE_PROFILING=1
 ENV CORECLR_PROFILER={36032161-FFC0-4B61-B559-F6C5D41BAE5A}
-ENV CORECLR_NEWRELIC_HOME=/app/newrelic
 ENV CORECLR_PROFILER_PATH=/app/newrelic/libNewRelicProfiler.so
+ENV CORECLR_NEWRELIC_HOME=/app/newrelic
+ENV NEW_RELIC_HOME=/app/newrelic
 
-# New Relic License and App Name
+# New Relic License and App Name (will be set from build args or docker-compose)
 ARG NEW_RELIC_LICENSE_KEY
 ENV NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
 ENV NEW_RELIC_APP_NAME="Product CRUD API"
 ENV NEW_RELIC_LOG_ENABLED=true
 ENV NEW_RELIC_LOG_LEVEL=info
-ENV NEW_RELIC_LABELS="Environment:Docker;Service:ProductAPI;Team:Engineering"
 
 # ASP.NET Core Configuration
 ENV ASPNETCORE_URLS=http://+:8080

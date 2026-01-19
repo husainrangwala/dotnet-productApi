@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   productapi:
     build:
@@ -11,13 +13,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - NEW_RELIC_LICENSE_KEY=${NEWRELIC_LICENSE_KEY}
-      - NEW_RELIC_APP_NAME=My Product CRUD API
-      - CORECLR_ENABLE_PROFILING=1
-      - CORECLR_PROFILER={36032161-FFC0-4B61-B559-F6C5D41BAE5A}
-    env_file:
-      - ./.env
-    volumes:
-      - .:/app/src
+      # Keep app name consistent with Dockerfile
+      - NEW_RELIC_APP_NAME=Product CRUD API
     networks:
       - productapi-network
 
