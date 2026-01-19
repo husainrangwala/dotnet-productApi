@@ -8,7 +8,7 @@ RUN dotnet restore
 
 # Copy everything else and build
 COPY . ./
-RUN dotnet publish -c Release -o out
+RUN dotnet publish ProductApi.csproj -c Release -o out
 
 # 2. Use the .NET 10 ASP.NET Runtime for the final stage
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
@@ -22,21 +22,27 @@ RUN apt-get update && \
 # Copy the published app
 COPY --from=build /app/out .
 
-# Create New Relic home directory
-RUN mkdir -p /app/newrelic
+# Copy New Relic agent from NuGet package
+RUN mkdir -p /app/newrelic && \
+    find /app -name "libNewRelicProfiler.so" -exec cp {} /app/newrelic/ \; && \
+    find /app -name "newrelic.config" -exec cp {} /app/newrelic/ \; && \
+    find /app -name "*.xml" -path "*newrelic*" -exec cp {} /app/newrelic/ \; && \
+    echo "New Relic files copied:" && \
+    ls -la /app/newrelic/ || echo "No agent files found in package"
 
 # --- NEW RELIC ENVIRONMENT CONFIGURATION ---
 ENV CORECLR_ENABLE_PROFILING=1
 ENV CORECLR_PROFILER={36032161-FFC0-4B61-B559-F6C5D41BAE5A}
-ENV CORECLR_NEWRELIC_HOME=/app
-ENV CORECLR_PROFILER_PATH=/app/libNewRelicProfiler.so
+ENV CORECLR_NEWRELIC_HOME=/app/newrelic
+ENV CORECLR_PROFILER_PATH=/app/newrelic/libNewRelicProfiler.so
 
 # New Relic License and App Name
 ARG NEW_RELIC_LICENSE_KEY
 ENV NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
-ENV NEW_RELIC_APP_NAME="My Product CRUD API"
+ENV NEW_RELIC_APP_NAME="Product CRUD API"
 ENV NEW_RELIC_LOG_ENABLED=true
 ENV NEW_RELIC_LOG_LEVEL=info
+ENV NEW_RELIC_LABELS="Environment:Docker;Service:ProductAPI;Team:Engineering"
 
 # ASP.NET Core Configuration
 ENV ASPNETCORE_URLS=http://+:8080

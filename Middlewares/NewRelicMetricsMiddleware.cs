@@ -15,6 +15,19 @@ public class NewRelicMetricsMiddleware
         _next = next;
         _logger = logger;
         _logger.LogInformation("[MIDDLEWARE] New Relic Metrics Middleware initialized");
+        
+        // Verify agent is attached
+        var agent = NewRelic.Api.Agent.NewRelic.GetAgent();
+        if (agent != null)
+        {
+            _logger.LogInformation("✓✓✓ [CRITICAL] New Relic Agent is ATTACHED and READY");
+            _logger.LogInformation($"[AGENT STATUS] Agent Type: {agent.GetType().FullName}");
+        }
+        else
+        {
+            _logger.LogError("✗✗✗ [CRITICAL] New Relic Agent is NOT ATTACHED - Profiler may not be loaded correctly");
+            _logger.LogError("Check that CORECLR_PROFILER_PATH points to the correct libNewRelicProfiler.so");
+        }
     }
 
     public async Task InvokeAsync(HttpContext context)

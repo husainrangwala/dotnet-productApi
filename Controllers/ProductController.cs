@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProductApi.Data;
 using ProductApi.Models;
+using NewRelic.Api.Agent;
 
 namespace ProductApi.Controllers;
 
@@ -20,6 +21,7 @@ public class ProductsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Product>>> GetProducts()
     {
+        NewRelic.Api.Agent.NewRelic.RecordMetric("Custom/Products/AllRequests", 1);
         return await _context.Products.ToListAsync();
     }
 
@@ -28,7 +30,11 @@ public class ProductsController : ControllerBase
     public async Task<ActionResult<Product>> GetProduct(int id)
     {
         var product = await _context.Products.FindAsync(id);
-        if (product == null) return NotFound();
+        if (product == null) {
+            NewRelic.Api.Agent.NewRelic.RecordMetric("Custom/Products/NotFound", 1);
+            return NotFound();
+        }
+        NewRelic.Api.Agent.NewRelic.RecordMetric("Custom/Products/AllRequests", 1);
         return product;
     }
 
@@ -38,6 +44,7 @@ public class ProductsController : ControllerBase
     {
         _context.Products.Add(product);
         await _context.SaveChangesAsync();
+        NewRelic.Api.Agent.NewRelic.RecordMetric("Custom/Products/AllRequests", 1);
         return CreatedAtAction(nameof(GetProduct), new { id = product.Id }, product);
     }
 
@@ -48,6 +55,7 @@ public class ProductsController : ControllerBase
         if (id != product.Id) return BadRequest();
         _context.Entry(product).State = EntityState.Modified;
         await _context.SaveChangesAsync();
+        NewRelic.Api.Agent.NewRelic.RecordMetric("Custom/Products/AllRequests", 1);
         return NoContent();
     }
 
@@ -59,6 +67,7 @@ public class ProductsController : ControllerBase
         if (product == null) return NotFound();
         _context.Products.Remove(product);
         await _context.SaveChangesAsync();
+        NewRelic.Api.Agent.NewRelic.RecordMetric("Custom/Products/AllRequests", 1);
         return NoContent();
     }
 }
